@@ -259,8 +259,11 @@ def scan_calculated_field_expressions(definition: dict, oc_dataset_identifiers: 
     """
     calc_fields = definition.get("CalculatedFields", [])
     if DEBUG and asset_label:
-        print(f"    [{asset_label}] {len(calc_fields)} calculated field(s) total: "
-              f"{[(c.get('Name'), c.get('DataSetIdentifier')) for c in calc_fields]}")
+        print(f"    [{asset_label}] {len(calc_fields)} calculated field(s) total:")
+        for c in calc_fields:
+            expr_preview = (c.get("Expression", "") or "")[:80]
+            print(f"        name={c.get('Name')!r}  DataSetIdentifier={c.get('DataSetIdentifier')!r}  "
+                  f"expr={expr_preview!r}")
 
     oc_columns_set = set(oc_columns)
     oc_calc_names = build_calc_field_name_lookup(calc_fields, oc_dataset_identifiers)
@@ -285,13 +288,25 @@ def scan_calculated_field_expressions(definition: dict, oc_dataset_identifiers: 
         return resolved
 
     for calc in calc_fields:
-        if calc.get("DataSetIdentifier") not in oc_dataset_identifiers:
+        calc_name = calc.get("Name", "")
+        ds_id = calc.get("DataSetIdentifier")
+        if ds_id not in oc_dataset_identifiers:
+            if DEBUG and asset_label:
+                expr_preview = (calc.get("Expression", "") or "")[:80]
+                print(f"      SKIP '{calc_name}': DataSetIdentifier={ds_id!r} not in {oc_dataset_identifiers} "
+                      f"(expr={expr_preview!r})")
             continue
         expr = calc.get("Expression", "")
         direct_refs = extract_field_refs(expr)
+        resolved_any = set()
         for ref in direct_refs:
-            for col in resolve_to_columns(ref, set()):
-                hits[col] += 1
+            resolved_any.update(resolve_to_columns(ref, set()))
+        if DEBUG and asset_label:
+            print(f"      CHECK '{calc_name}': expr={expr!r}")
+            print(f"        -> extracted refs: {direct_refs}")
+            print(f"        -> resolved to OC columns: {resolved_any}")
+        for col in resolved_any:
+            hits[col] += 1
 
 
 def scan_quicksight_definition(definition: dict, oc_columns: list[str], asset_label: str = "") -> Counter:
